@@ -80,9 +80,9 @@ OPEN ──► IN_PROGRESS ──► RESOLVED ──► CLOSED (Terminal)
 ---
 
 ## 8. Testing Strategy
-1. **Unit Tests (18 tests in Vitest)**:
+1. **Unit Tests (22 tests in Vitest)**:
    - `tests/unit/sla.test.ts` (9 tests): Covers normal weekdays, outside hours, weekend rollover, Friday evening rollover, holidays, multi-day SLAs, remaining minutes, and SLA states.
-   - `tests/unit/business_logic.test.ts` (9 tests): Covers state transitions, illegal transition rejection, input validation, role-based authorization, and first-response timestamp recording.
+   - `tests/unit/business_logic.test.ts` (13 tests): Covers state transitions, illegal transition rejection, input validation, role-based authorization, first-response timestamp recording, and cursor pagination mechanics.
 2. **Integration Testing**:
    - `tests/integration/sla.test.ts`: Tests complete ticket lifecycle against PostgreSQL persistence. Guarded with `TEST_DATABASE_URL` to protect development and production databases from accidental wiping.
 

@@ -294,7 +294,7 @@ Pre-populated for instant testing:
 Execute unit tests and database integration tests using Vitest:
 
 ```bash
-# Run all unit tests (18 tests)
+# Run all unit tests (22 tests)
 npm run test:unit --workspace=backend
 
 # Run full test suite
@@ -302,9 +302,10 @@ npm run test --workspace=backend
 ```
 
 ### Test Coverage Summary:
-- **18 Unit Tests (All Passing)**:
+- **22 Unit Tests (All Passing)**:
   - **SLA Engine (9 tests)**: Normal weekday, before business hours, after business hours, weekends, Friday evening rollover, holidays, multi-day SLAs, and SLA state thresholds (`ON_TRACK`, `AT_RISK`, `BREACHED`).
   - **Business Logic & Status Transitions (9 tests)**: Status transition state machine (`OPEN` &rarr; `IN_PROGRESS` &rarr; `RESOLVED` &rarr; `CLOSED`), illegal transition rejection, input validation (`VALIDATION_ERROR`), authorization guards (`FORBIDDEN`, `UNAUTHORIZED`), and first-response clock freezing.
+  - **Cursor Pagination Mechanics (4 tests)**: First page cursor, next page cursor advancing, last page terminal check (`hasNextPage: false`), and empty dataset handling.
 - **1 Persistence Integration Test**: Full ticket lifecycle against a dedicated test database (guarded with `TEST_DATABASE_URL` to ensure development/production data is never accidentally modified).
 
 ---
