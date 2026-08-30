@@ -798,17 +798,40 @@ export default function Home() {
                   </div>
 
                   <div>
-                    <label className="text-[11px] text-neutral-400 block mb-1">Status</label>
+                    <label className="text-[11px] text-neutral-400 block mb-1">
+                      Status {selectedTicket.status === 'CLOSED' && <span className="text-[10px] text-neutral-500 font-normal">(Finalized)</span>}
+                    </label>
                     <select
                       value={selectedTicket.status}
                       onChange={(e) => handleStatusChange(e.target.value)}
-                      disabled={currentUser?.role !== 'AGENT'}
+                      disabled={currentUser?.role !== 'AGENT' || selectedTicket.status === 'CLOSED'}
                       className="w-full bg-neutral-900 border border-neutral-700 text-xs rounded-lg px-2.5 py-1.5 text-neutral-200 disabled:opacity-50"
                     >
-                      <option value="OPEN">Open</option>
-                      <option value="IN_PROGRESS">In Progress</option>
-                      <option value="RESOLVED">Resolved</option>
-                      <option value="CLOSED">Closed</option>
+                      {selectedTicket.status === 'OPEN' && (
+                        <>
+                          <option value="OPEN">Open (Current)</option>
+                          <option value="IN_PROGRESS">In Progress</option>
+                          <option value="RESOLVED">Resolved</option>
+                          <option value="CLOSED">Closed</option>
+                        </>
+                      )}
+                      {selectedTicket.status === 'IN_PROGRESS' && (
+                        <>
+                          <option value="IN_PROGRESS">In Progress (Current)</option>
+                          <option value="RESOLVED">Resolved</option>
+                          <option value="CLOSED">Closed</option>
+                        </>
+                      )}
+                      {selectedTicket.status === 'RESOLVED' && (
+                        <>
+                          <option value="RESOLVED">Resolved (Current)</option>
+                          <option value="IN_PROGRESS">In Progress (Re-open)</option>
+                          <option value="CLOSED">Closed</option>
+                        </>
+                      )}
+                      {selectedTicket.status === 'CLOSED' && (
+                        <option value="CLOSED">Closed (Terminal State)</option>
+                      )}
                     </select>
                   </div>
                 </div>
