@@ -1,0 +1,117 @@
+type Query {
+  tickets(
+    status: TicketStatus
+    priority: Priority
+    assigneeId: ID
+    slaState: SLAState
+    take: Int
+    cursor: String
+  ): TicketConnection!
+  
+  ticket(id: ID!): Ticket
+  dashboard: TicketDashboard!
+  users(role: UserRole): [User!]!
+  holidays: [Holiday!]!
+}
+
+type Mutation {
+  createTicket(title: String!, description: String!, priority: Priority!): Ticket!
+  assignTicket(ticketId: ID!, assigneeId: ID!): Ticket!
+  changeTicketStatus(ticketId: ID!, status: TicketStatus!): Ticket!
+  addComment(ticketId: ID!, content: String!): Comment!
+  resolveTicket(ticketId: ID!): Ticket!
+  
+  register(name: String!, email: String!, password: String!, role: UserRole!): AuthPayload!
+  login(email: String!, password: String!): AuthPayload!
+}
+
+type Ticket {
+  id: ID!
+  title: String!
+  description: String!
+  priority: Priority!
+  status: TicketStatus!
+  reporter: User!
+  assignee: User
+  createdAt: String!
+  firstResponseAt: String
+  resolvedAt: String
+  sla: SLAInfo!
+  comments: [Comment!]!
+}
+
+type Comment {
+  id: ID!
+  content: String!
+  author: User!
+  createdAt: String!
+}
+
+type User {
+  id: ID!
+  name: String!
+  email: String!
+  role: UserRole!
+}
+
+type Holiday {
+  id: ID!
+  date: String!
+  name: String!
+}
+
+type TicketConnection {
+  nodes: [Ticket!]!
+  pageInfo: PageInfo!
+}
+
+type PageInfo {
+  hasNextPage: Boolean!
+  endCursor: String
+}
+
+type TicketDashboard {
+  openTickets: Int!
+  inProgressTickets: Int!
+  atRiskTickets: Int!
+  breachedTickets: Int!
+}
+
+type SLAInfo {
+  firstResponseDueAt: String!
+  resolutionDueAt: String!
+  firstResponseState: SLAState!
+  resolutionState: SLAState!
+  firstResponseRemainingMinutes: Int!
+  resolutionRemainingMinutes: Int!
+}
+
+type AuthPayload {
+  token: String!
+  user: User!
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TicketStatus {
+  OPEN
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+}
+
+enum SLAState {
+  ON_TRACK
+  AT_RISK
+  BREACHED
+}
+
+enum UserRole {
+  REPORTER
+  AGENT
+}
