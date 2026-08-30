@@ -201,6 +201,7 @@ export default function Home() {
   const [filterStatus, setFilterStatus] = useState<string>("");
   const [filterPriority, setFilterPriority] = useState<string>("");
   const [filterSlaState, setFilterSlaState] = useState<string>("");
+  const [searchQuery, setSearchQuery] = useState<string>("");
   const [sortBy, setSortBy] = useState<"NEWEST" | "OLDEST" | "PRIORITY" | "SLA_URGENT">("NEWEST");
   const [pageSize, setPageSize] = useState<number>(10);
   const [cursor, setCursor] = useState<string | null>(null);
@@ -440,7 +441,18 @@ export default function Home() {
   const holidays: Holiday[] = data?.holidays || [];
 
   const tickets = React.useMemo(() => {
-    const list = [...rawTickets];
+    let list = [...rawTickets];
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase().trim();
+      list = list.filter(
+        (t) =>
+          t.title.toLowerCase().includes(q) ||
+          t.description.toLowerCase().includes(q) ||
+          t.id.toLowerCase().includes(q) ||
+          (t.reporter?.name && t.reporter.name.toLowerCase().includes(q)) ||
+          (t.assignee?.name && t.assignee.name.toLowerCase().includes(q))
+      );
+    }
     if (sortBy === "NEWEST") {
       return list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     }
@@ -459,7 +471,7 @@ export default function Home() {
       });
     }
     return list;
-  }, [rawTickets, sortBy]);
+  }, [rawTickets, sortBy, searchQuery]);
 
   const formatMins = (m: number) => {
     if (m <= 0) return "0m";
@@ -600,45 +612,67 @@ export default function Home() {
         {/* Filter & Sort Controls */}
         <section className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            <span className="text-xs text-neutral-400 font-medium">Filter:</span>
-            
-            {/* Status Filter */}
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg px-3 py-1.5 text-neutral-300 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">All Statuses</option>
-              <option value="OPEN">Open</option>
-              <option value="IN_PROGRESS">In Progress</option>
-              <option value="RESOLVED">Resolved</option>
-              <option value="CLOSED">Closed</option>
-            </select>
+            {/* Search Input */}
+            <div className="relative flex items-center">
+              <input
+                type="text"
+                placeholder="Search tickets, ID, user..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg pl-8 pr-7 py-1.5 text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 w-44 sm:w-56 transition-all"
+              />
+              <span className="absolute left-2.5 text-neutral-500 text-xs pointer-events-none">🔍</span>
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2 text-neutral-500 hover:text-neutral-300 text-xs"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
 
-            {/* Priority Filter */}
-            <select
-              value={filterPriority}
-              onChange={(e) => setFilterPriority(e.target.value)}
-              className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg px-3 py-1.5 text-neutral-300 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">All Priorities</option>
-              <option value="URGENT">Urgent</option>
-              <option value="HIGH">High</option>
-              <option value="MEDIUM">Medium</option>
-              <option value="LOW">Low</option>
-            </select>
+            <div className="flex items-center gap-1.5 border-l border-neutral-800 pl-3">
+              <span className="text-xs text-neutral-400 font-medium">Filter:</span>
+              
+              {/* Status Filter */}
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg px-3 py-1.5 text-neutral-300 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">All Statuses</option>
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="RESOLVED">Resolved</option>
+                <option value="CLOSED">Closed</option>
+              </select>
 
-            {/* SLA State Filter */}
-            <select
-              value={filterSlaState}
-              onChange={(e) => setFilterSlaState(e.target.value)}
-              className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg px-3 py-1.5 text-neutral-300 focus:outline-none focus:border-indigo-500"
-            >
-              <option value="">All SLA States</option>
-              <option value="ON_TRACK">On Track</option>
-              <option value="AT_RISK">At Risk</option>
-              <option value="BREACHED">Breached</option>
-            </select>
+              {/* Priority Filter */}
+              <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value)}
+                className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg px-3 py-1.5 text-neutral-300 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">All Priorities</option>
+                <option value="URGENT">Urgent</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+              </select>
+
+              {/* SLA State Filter */}
+              <select
+                value={filterSlaState}
+                onChange={(e) => setFilterSlaState(e.target.value)}
+                className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg px-3 py-1.5 text-neutral-300 focus:outline-none focus:border-indigo-500"
+              >
+                <option value="">All SLA States</option>
+                <option value="ON_TRACK">On Track</option>
+                <option value="AT_RISK">At Risk</option>
+                <option value="BREACHED">Breached</option>
+              </select>
+            </div>
 
             {/* Sort Control */}
             <div className="flex items-center gap-1.5 border-l border-neutral-800 pl-3">
@@ -670,9 +704,9 @@ export default function Home() {
               </select>
             </div>
 
-            {(filterStatus || filterPriority || filterSlaState) && (
+            {(filterStatus || filterPriority || filterSlaState || searchQuery) && (
               <button
-                onClick={() => { setFilterStatus(""); setFilterPriority(""); setFilterSlaState(""); }}
+                onClick={() => { setFilterStatus(""); setFilterPriority(""); setFilterSlaState(""); setSearchQuery(""); }}
                 className="text-xs text-neutral-500 hover:text-neutral-300 underline ml-1"
               >
                 Clear
