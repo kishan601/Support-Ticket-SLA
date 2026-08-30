@@ -226,6 +226,24 @@ export default function Home() {
   const [isAuthSubmitting, setIsAuthSubmitting] = useState(false);
   const isLoggingInRef = React.useRef(false);
   const hasInitializedRef = React.useRef(false);
+  const searchInputRef = React.useRef<HTMLInputElement>(null);
+
+  // Global keyboard shortcuts: Esc to close drawers/modals, Ctrl+K to focus search
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (selectedTicket) setSelectedTicket(null);
+        if (isCreateOpen) setIsCreateOpen(false);
+        if (isAuthOpen) setIsAuthOpen(false);
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedTicket, isCreateOpen, isAuthOpen]);
 
   const [, executeLogin] = useMutation(LoginMutation);
   const [, executeRegister] = useMutation(RegisterMutation);
@@ -612,24 +630,31 @@ export default function Home() {
         {/* Filter & Sort Controls */}
         <section className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex flex-wrap items-center gap-3">
-            {/* Search Input */}
+            {/* Search Input with Ctrl+K shortcut */}
             <div className="relative flex items-center">
               <input
+                ref={searchInputRef}
                 type="text"
                 placeholder="Search tickets, ID, user..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg pl-8 pr-7 py-1.5 text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 w-44 sm:w-56 transition-all"
+                className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg pl-8 pr-14 py-1.5 text-neutral-200 placeholder-neutral-500 focus:outline-none focus:border-indigo-500 w-44 sm:w-60 transition-all"
               />
               <span className="absolute left-2.5 text-neutral-500 text-xs pointer-events-none">🔍</span>
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-2 text-neutral-500 hover:text-neutral-300 text-xs"
-                >
-                  ✕
-                </button>
-              )}
+              <div className="absolute right-2 flex items-center">
+                {searchQuery ? (
+                  <button
+                    onClick={() => setSearchQuery("")}
+                    className="text-neutral-500 hover:text-neutral-300 text-xs"
+                  >
+                    ✕
+                  </button>
+                ) : (
+                  <kbd className="hidden sm:inline-block bg-neutral-800/80 border border-neutral-700/60 text-[10px] text-neutral-400 px-1.5 py-0.5 rounded font-mono pointer-events-none">
+                    Ctrl K
+                  </kbd>
+                )}
+              </div>
             </div>
 
             <div className="flex items-center gap-1.5 border-l border-neutral-800 pl-3">
