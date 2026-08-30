@@ -4,14 +4,14 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "urql";
 
 const DashboardAndTicketsQuery = `
-  query GetDashboardAndTickets($status: TicketStatus, $priority: Priority, $slaState: SLAState) {
+  query GetDashboardAndTickets($status: TicketStatus, $priority: Priority, $slaState: SLAState, $take: Int) {
     dashboard {
       openTickets
       inProgressTickets
       atRiskTickets
       breachedTickets
     }
-    tickets(status: $status, priority: $priority, slaState: $slaState, take: 50) {
+    tickets(status: $status, priority: $priority, slaState: $slaState, take: $take) {
       nodes {
         id
         title
@@ -198,6 +198,7 @@ export default function Home() {
   const [filterPriority, setFilterPriority] = useState<string>("");
   const [filterSlaState, setFilterSlaState] = useState<string>("");
   const [sortBy, setSortBy] = useState<"NEWEST" | "OLDEST" | "PRIORITY" | "SLA_URGENT">("NEWEST");
+  const [pageSize, setPageSize] = useState<number>(10);
   
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -230,7 +231,8 @@ export default function Home() {
     status: filterStatus || null,
     priority: filterPriority || null,
     slaState: filterSlaState || null,
-  }), [filterStatus, filterPriority, filterSlaState]);
+    take: pageSize,
+  }), [filterStatus, filterPriority, filterSlaState, pageSize]);
 
   const queryContext = React.useMemo(() => ({
     additionalTypenames: ['Ticket', 'Comment', 'User', 'Dashboard']
@@ -617,6 +619,21 @@ export default function Home() {
               </select>
             </div>
 
+            {/* Limit Control */}
+            <div className="flex items-center gap-1.5 border-l border-neutral-800 pl-3">
+              <span className="text-xs text-neutral-400 font-medium">Limit:</span>
+              <select
+                value={pageSize}
+                onChange={(e) => setPageSize(Number(e.target.value))}
+                className="bg-neutral-900 border border-neutral-800 text-xs rounded-lg px-2.5 py-1.5 text-neutral-300 focus:outline-none focus:border-indigo-500"
+              >
+                <option value={5}>5</option>
+                <option value={10}>10</option>
+                <option value={15}>15</option>
+                <option value={25}>25</option>
+              </select>
+            </div>
+
             {(filterStatus || filterPriority || filterSlaState) && (
               <button
                 onClick={() => { setFilterStatus(""); setFilterPriority(""); setFilterSlaState(""); }}
@@ -628,27 +645,28 @@ export default function Home() {
           </div>
 
           <div className="text-xs text-neutral-500">
-            Showing {tickets.length} tickets
+            Showing {tickets.length} tickets (Limit: {pageSize})
           </div>
         </section>
 
-        {/* Tickets Table */}
+        {/* Tickets Table with Inner Scrollbar */}
         <section className="bg-neutral-900 border border-neutral-800 rounded-2xl overflow-hidden shadow-2xl">
           {fetching && !data ? (
             <div className="p-12 text-center text-neutral-400 text-sm">Loading tickets...</div>
           ) : (
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="border-b border-neutral-800 text-neutral-400 text-xs bg-neutral-900/80">
-                  <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-20">ID</th>
-                  <th className="px-6 py-3.5 font-medium uppercase tracking-wider">Title</th>
-                  <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-28">Priority</th>
-                  <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-32">Status</th>
-                  <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-40">Assignee</th>
-                  <th className="px-6 py-3.5 font-medium uppercase tracking-wider text-right w-44">Response SLA</th>
-                  <th className="px-6 py-3.5 font-medium uppercase tracking-wider text-right w-44">Resolution SLA</th>
-                </tr>
-              </thead>
+            <div className="max-h-[480px] overflow-y-auto overflow-x-auto custom-scrollbar">
+              <table className="w-full text-left border-collapse">
+                <thead className="sticky top-0 z-10 bg-neutral-900/95 backdrop-blur border-b border-neutral-800 shadow-sm">
+                  <tr className="text-neutral-400 text-xs">
+                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-20">ID</th>
+                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider">Title</th>
+                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-28">Priority</th>
+                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-32">Status</th>
+                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-40">Assignee</th>
+                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider text-right w-44">Response SLA</th>
+                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider text-right w-44">Resolution SLA</th>
+                  </tr>
+                </thead>
               <tbody className="divide-y divide-neutral-800/60 text-sm">
                 {tickets.map((t: Ticket) => {
                   const frSla = t.sla;
@@ -714,6 +732,7 @@ export default function Home() {
                 )}
               </tbody>
             </table>
+            </div>
           )}
         </section>
       </main>

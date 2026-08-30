@@ -24,3 +24,25 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* Custom Sleek Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: rgba(23, 23, 23, 0.6);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(115, 115, 115, 0.4);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(163, 163, 163, 0.7);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(115, 115, 115, 0.4) rgba(23, 23, 23, 0.6);
+}
