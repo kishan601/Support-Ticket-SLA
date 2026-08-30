@@ -69,4 +69,58 @@ describe('Business Logic & Validation Rules', () => {
       expect(() => checkAgentAuthorization(undefined)).toThrow('FORBIDDEN');
     });
   });
+
+  describe('Cursor-Based Pagination Logic', () => {
+    const mockTickets = Array.from({ length: 25 }, (_, i) => ({
+      id: `ticket-${i + 1}`,
+      title: `Ticket ${i + 1}`
+    }));
+
+    function paginateTickets(items: typeof mockTickets, take: number, cursor?: string | null) {
+      let startIndex = 0;
+      if (cursor) {
+        const index = items.findIndex((t) => t.id === cursor);
+        if (index !== -1) startIndex = index + 1;
+      }
+      const nodes = items.slice(startIndex, startIndex + take);
+      const hasNextPage = startIndex + take < items.length;
+      const endCursor = nodes.length > 0 ? nodes[nodes.length - 1]?.id ?? null : null;
+      return { nodes, pageInfo: { hasNextPage, endCursor } };
+    }
+
+    it('returns first page with hasNextPage=true when items exceed take', () => {
+      const page1 = paginateTickets(mockTickets, 10);
+      expect(page1.nodes).toHaveLength(10);
+      expect(page1.nodes[0].id).toBe('ticket-1');
+      expect(page1.nodes[9].id).toBe('ticket-10');
+      expect(page1.pageInfo.hasNextPage).toBe(true);
+      expect(page1.pageInfo.endCursor).toBe('ticket-10');
+    });
+
+    it('returns second page starting after endCursor', () => {
+      const page2 = paginateTickets(mockTickets, 10, 'ticket-10');
+      expect(page2.nodes).toHaveLength(10);
+      expect(page2.nodes[0].id).toBe('ticket-11');
+      expect(page2.nodes[9].id).toBe('ticket-20');
+      expect(page2.pageInfo.hasNextPage).toBe(true);
+      expect(page2.pageInfo.endCursor).toBe('ticket-20');
+    });
+
+    it('returns last page with hasNextPage=false', () => {
+      const page3 = paginateTickets(mockTickets, 10, 'ticket-20');
+      expect(page3.nodes).toHaveLength(5);
+      expect(page3.nodes[0].id).toBe('ticket-21');
+      expect(page3.nodes[4].id).toBe('ticket-25');
+      expect(page3.pageInfo.hasNextPage).toBe(false);
+      expect(page3.pageInfo.endCursor).toBe('ticket-25');
+    });
+
+    it('handles empty collection gracefully', () => {
+      const emptyPage = paginateTickets([], 10);
+      expect(emptyPage.nodes).toHaveLength(0);
+      expect(emptyPage.pageInfo.hasNextPage).toBe(false);
+      expect(emptyPage.pageInfo.endCursor).toBeNull();
+    });
+  });
 });
+
