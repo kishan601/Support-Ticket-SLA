@@ -163,20 +163,57 @@ The default SLA policies configured per priority:
 
 ## Ticket Status Transition Rules
 
-The server enforces lifecycle status transitions:
-- **`OPEN`** &rarr; **`IN_PROGRESS`** &rarr; **`RESOLVED`** &rarr; **`CLOSED`**
-- **Invalid Transition Protection**: A `CLOSED` ticket cannot transition directly back to `IN_PROGRESS`. Attempting this returns a GraphQL error: `INVALID_STATUS_TRANSITION`.
-- **Resolving**: Marking status as `RESOLVED` automatically sets `resolvedAt` timestamp and stops the resolution clock.
+The server and frontend UI enforce a strict state machine lifecycle:
+
+```text
+  ┌─────────┐
+  │  OPEN   ├─────────────────┬──────────────┐
+  └────┬────┘                 │              │
+       │                      │              │
+       ▼                      │              │
+┌──────────────┐              │              │
+│ IN_PROGRESS  ├────────┐     │              │
+└──────┬───────┘        │     │              │
+       │                ▼     ▼              ▼
+       │             ┌──────────────┐   ┌──────────┐
+       │             │   RESOLVED   ├──►│  CLOSED  │
+       │             └──────┬───────┘   └──────────┘
+       │                    │ (reopen)       ▲
+       └────────────────────┼────────────────┘
+                            │
+                            ▼
+                     (IN_PROGRESS)
+```
+
+- **Transition Rules**:
+  - `OPEN` &rarr; `IN_PROGRESS`, `RESOLVED`, `CLOSED`
+  - `IN_PROGRESS` &rarr; `RESOLVED`, `CLOSED` (cannot move backwards to `OPEN`)
+  - `RESOLVED` &rarr; `CLOSED` or `IN_PROGRESS` (re-open for rework)
+  - `CLOSED` &rarr; **Terminal state** (cannot transition to any other status)
+- **Server Enforcement**: Any invalid transition attempt throws a clear GraphQL error: `INVALID_STATUS_TRANSITION`.
+- **UI Dynamic Options**: The ticket detail status dropdown dynamically filters options to show only valid next states, and disables itself when a ticket is `CLOSED`.
+- **Resolving**: Marking a ticket as `RESOLVED` automatically sets the `resolvedAt` timestamp and stops the resolution clock.
 
 ---
 
-## Authentication & Authorization
+## Authentication & Error Handling
 
+### Authentication & Roles
 - **JWT Tokens**: Emitted upon `login` or `register` and supplied via the standard HTTP `Authorization: Bearer <token>` header.
-- **Server-Side Enforcement**:
+- **Server-Side Role Enforcement**:
   - `REPORTER`: Allowed to create tickets and comment on tickets.
-  - `AGENT`: Exclusively allowed to assign tickets, change ticket status, resolve tickets, and post official responses.
-  - Unauthorized or forbidden operations return `UNAUTHORIZED` or `FORBIDDEN` GraphQL errors.
+  - `AGENT`: Exclusively allowed to assign tickets, change ticket status, resolve tickets, and post official agent responses.
+
+### Machine-Readable Error Codes
+Every error thrown by the GraphQL server uses standardized, machine-readable codes:
+| Error Code | Description |
+|---|---|
+| `VALIDATION_ERROR` | Empty or whitespace-only inputs (title, description, comment content, user registration fields) |
+| `INVALID_STATUS_TRANSITION` | Attempting a forbidden status transition (e.g. moving a `CLOSED` ticket or moving `IN_PROGRESS` to `OPEN`) |
+| `USER_NOT_FOUND` | Assigning a ticket to a non-existent user ID or logging in with an unknown email |
+| `TICKET_NOT_FOUND` | Mutating a ticket that does not exist in the database |
+| `UNAUTHORIZED` | Performing an authenticated action without a valid JWT token |
+| `FORBIDDEN` | Attempting an agent-only action with a reporter account |
 
 ---
 
@@ -187,6 +224,9 @@ Inside `backend/.env`:
 ```env
 # Database connection string (PostgreSQL)
 DATABASE_URL="postgresql://postgres:password@localhost:5432/support_ticket_db?schema=public"
+
+# Optional: Dedicated test database for running integration tests
+TEST_DATABASE_URL="postgresql://postgres:password@localhost:5432/support_ticket_test_db?schema=public"
 
 # JWT Signing secret
 JWT_SECRET="your-super-secret-jwt-key"
@@ -254,12 +294,18 @@ Pre-populated for instant testing:
 Execute unit tests and database integration tests using Vitest:
 
 ```bash
+# Run all unit tests (18 tests)
+npm run test:unit --workspace=backend
+
+# Run full test suite
 npm run test --workspace=backend
 ```
 
 ### Test Coverage Summary:
-- **9 Unit Tests**: Normal weekday, before business hours, after business hours, weekends, Friday evening rollover, holidays, multi-day SLAs, and SLA state thresholds.
-- **1 Integration Test**: Full ticket lifecycle against live PostgreSQL persistence layer.
+- **18 Unit Tests (All Passing)**:
+  - **SLA Engine (9 tests)**: Normal weekday, before business hours, after business hours, weekends, Friday evening rollover, holidays, multi-day SLAs, and SLA state thresholds (`ON_TRACK`, `AT_RISK`, `BREACHED`).
+  - **Business Logic & Status Transitions (9 tests)**: Status transition state machine (`OPEN` &rarr; `IN_PROGRESS` &rarr; `RESOLVED` &rarr; `CLOSED`), illegal transition rejection, input validation (`VALIDATION_ERROR`), authorization guards (`FORBIDDEN`, `UNAUTHORIZED`), and first-response clock freezing.
+- **1 Persistence Integration Test**: Full ticket lifecycle against a dedicated test database (guarded with `TEST_DATABASE_URL` to ensure development/production data is never accidentally modified).
 
 ---
 
