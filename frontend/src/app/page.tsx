@@ -4,14 +4,18 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation } from "urql";
 
 const DashboardAndTicketsQuery = `
-  query GetDashboardAndTickets($status: TicketStatus, $priority: Priority, $slaState: SLAState, $take: Int) {
+  query GetDashboardAndTickets($status: TicketStatus, $priority: Priority, $slaState: SLAState, $take: Int, $cursor: String) {
     dashboard {
       openTickets
       inProgressTickets
       atRiskTickets
       breachedTickets
     }
-    tickets(status: $status, priority: $priority, slaState: $slaState, take: $take) {
+    tickets(status: $status, priority: $priority, slaState: $slaState, take: $take, cursor: $cursor) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
       nodes {
         id
         title
@@ -199,6 +203,9 @@ export default function Home() {
   const [filterSlaState, setFilterSlaState] = useState<string>("");
   const [sortBy, setSortBy] = useState<"NEWEST" | "OLDEST" | "PRIORITY" | "SLA_URGENT">("NEWEST");
   const [pageSize, setPageSize] = useState<number>(10);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [cursorHistory, setCursorHistory] = useState<(string | null)[]>([null]);
+  const [pageNumber, setPageNumber] = useState<number>(1);
   
   const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -227,12 +234,20 @@ export default function Home() {
   const [, executeChangeStatus] = useMutation(ChangeStatusMutation);
   const [, executeResolveTicket] = useMutation(ResolveTicketMutation);
 
+  // Reset pagination when filters or page size change
+  useEffect(() => {
+    setCursor(null);
+    setCursorHistory([null]);
+    setPageNumber(1);
+  }, [filterStatus, filterPriority, filterSlaState, pageSize]);
+
   const queryVariables = React.useMemo(() => ({
     status: filterStatus || null,
     priority: filterPriority || null,
     slaState: filterSlaState || null,
     take: pageSize,
-  }), [filterStatus, filterPriority, filterSlaState, pageSize]);
+    cursor: cursor || null,
+  }), [filterStatus, filterPriority, filterSlaState, pageSize, cursor]);
 
   const queryContext = React.useMemo(() => ({
     additionalTypenames: ['Ticket', 'Comment', 'User', 'Dashboard']
@@ -396,6 +411,27 @@ export default function Home() {
     if (res.error) {
       setActionError(res.error.message);
     }
+  };
+
+  const pageInfo = data?.tickets?.pageInfo;
+  const hasNextPage = pageInfo?.hasNextPage ?? false;
+  const hasPrevPage = pageNumber > 1;
+
+  const handleNextPage = () => {
+    if (!hasNextPage || !pageInfo?.endCursor) return;
+    setCursorHistory((prev) => [...prev, pageInfo.endCursor]);
+    setCursor(pageInfo.endCursor);
+    setPageNumber((prev) => prev + 1);
+  };
+
+  const handlePrevPage = () => {
+    if (!hasPrevPage) return;
+    const newHistory = [...cursorHistory];
+    newHistory.pop();
+    const prevCursor = newHistory[newHistory.length - 1] ?? null;
+    setCursorHistory(newHistory);
+    setCursor(prevCursor);
+    setPageNumber((prev) => Math.max(1, prev - 1));
   };
 
   const dashboard: DashboardData | undefined = data?.dashboard;
@@ -654,85 +690,118 @@ export default function Home() {
           {fetching && !data ? (
             <div className="p-12 text-center text-neutral-400 text-sm">Loading tickets...</div>
           ) : (
-            <div className="max-h-[480px] overflow-y-auto overflow-x-auto custom-scrollbar">
-              <table className="w-full text-left border-collapse">
-                <thead className="sticky top-0 z-10 bg-neutral-900/95 backdrop-blur border-b border-neutral-800 shadow-sm">
-                  <tr className="text-neutral-400 text-xs">
-                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-20">ID</th>
-                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider">Title</th>
-                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-28">Priority</th>
-                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-32">Status</th>
-                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-40">Assignee</th>
-                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider text-right w-44">Response SLA</th>
-                    <th className="px-6 py-3.5 font-medium uppercase tracking-wider text-right w-44">Resolution SLA</th>
-                  </tr>
-                </thead>
-              <tbody className="divide-y divide-neutral-800/60 text-sm">
-                {tickets.map((t: Ticket) => {
-                  const frSla = t.sla;
-                  const isResolved = t.status === "RESOLVED" || t.status === "CLOSED";
-                  const isFirstResponded = !!t.firstResponseAt;
-
-                  const getSlaBadge = (state: string, mins: number, frozen: boolean) => {
-                    if (frozen) {
-                      return <span className="text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded">Met</span>;
-                    }
-                    if (state === "BREACHED") {
-                      return <span className="text-xs text-red-400 font-medium bg-red-500/10 px-2 py-0.5 rounded">Breached</span>;
-                    }
-                    if (state === "AT_RISK") {
-                      return <span className="text-xs text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded">{formatMins(mins)} rem</span>;
-                    }
-                    return <span className="text-xs text-neutral-300 font-medium bg-neutral-800 px-2 py-0.5 rounded">{formatMins(mins)}</span>;
-                  };
-
-                  return (
-                    <tr
-                      key={t.id}
-                      onClick={() => setSelectedTicket(t)}
-                      className="hover:bg-neutral-800/40 transition-colors cursor-pointer group"
-                    >
-                      <td className="px-6 py-4 font-mono text-xs text-neutral-500 group-hover:text-neutral-300">
-                        #{t.id.slice(0, 5)}
-                      </td>
-                      <td className="px-6 py-4 text-neutral-200 font-medium group-hover:text-white">
-                        {t.title}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span className={`text-xs font-semibold tracking-wider px-2 py-0.5 rounded ${
-                          t.priority === 'URGENT' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
-                          t.priority === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
-                          t.priority === 'MEDIUM' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
-                          'bg-neutral-800 text-neutral-400'
-                        }`}>
-                          {t.priority}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-xs font-medium text-neutral-300">
-                        {t.status.replace("_", " ")}
-                      </td>
-                      <td className="px-6 py-4 text-xs text-neutral-400">
-                        {t.assignee ? t.assignee.name : <span className="text-neutral-600 italic">Unassigned</span>}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {getSlaBadge(frSla.firstResponseState, frSla.firstResponseRemainingMinutes, isFirstResponded)}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        {getSlaBadge(frSla.resolutionState, frSla.resolutionRemainingMinutes, isResolved)}
-                      </td>
+            <>
+              <div className="max-h-[480px] overflow-y-auto overflow-x-auto custom-scrollbar">
+                <table className="w-full text-left border-collapse">
+                  <thead className="sticky top-0 z-10 bg-neutral-900/95 backdrop-blur border-b border-neutral-800 shadow-sm">
+                    <tr className="text-neutral-400 text-xs">
+                      <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-20">ID</th>
+                      <th className="px-6 py-3.5 font-medium uppercase tracking-wider">Title</th>
+                      <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-28">Priority</th>
+                      <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-32">Status</th>
+                      <th className="px-6 py-3.5 font-medium uppercase tracking-wider w-40">Assignee</th>
+                      <th className="px-6 py-3.5 font-medium uppercase tracking-wider text-right w-44">Response SLA</th>
+                      <th className="px-6 py-3.5 font-medium uppercase tracking-wider text-right w-44">Resolution SLA</th>
                     </tr>
-                  );
-                })}
-                {tickets.length === 0 && (
-                  <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center text-neutral-500 text-sm">
-                      No tickets matching the filter criteria.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-            </div>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-800/60 text-sm">
+                    {tickets.map((t: Ticket) => {
+                      const frSla = t.sla;
+                      const isResolved = t.status === "RESOLVED" || t.status === "CLOSED";
+                      const isFirstResponded = !!t.firstResponseAt;
+
+                      const getSlaBadge = (state: string, mins: number, frozen: boolean) => {
+                        if (frozen) {
+                          return <span className="text-xs text-emerald-400 font-medium bg-emerald-500/10 px-2 py-0.5 rounded">Met</span>;
+                        }
+                        if (state === "BREACHED") {
+                          return <span className="text-xs text-red-400 font-medium bg-red-500/10 px-2 py-0.5 rounded">Breached</span>;
+                        }
+                        if (state === "AT_RISK") {
+                          return <span className="text-xs text-amber-400 font-medium bg-amber-500/10 px-2 py-0.5 rounded">{formatMins(mins)} rem</span>;
+                        }
+                        return <span className="text-xs text-neutral-300 font-medium bg-neutral-800 px-2 py-0.5 rounded">{formatMins(mins)}</span>;
+                      };
+
+                      return (
+                        <tr
+                          key={t.id}
+                          onClick={() => setSelectedTicket(t)}
+                          className="hover:bg-neutral-800/40 transition-colors cursor-pointer group"
+                        >
+                          <td className="px-6 py-4 font-mono text-xs text-neutral-500 group-hover:text-neutral-300">
+                            #{t.id.slice(0, 5)}
+                          </td>
+                          <td className="px-6 py-4 text-neutral-200 font-medium group-hover:text-white">
+                            {t.title}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`text-xs font-semibold tracking-wider px-2 py-0.5 rounded ${
+                              t.priority === 'URGENT' ? 'bg-red-500/20 text-red-400 border border-red-500/30' :
+                              t.priority === 'HIGH' ? 'bg-orange-500/20 text-orange-400 border border-orange-500/30' :
+                              t.priority === 'MEDIUM' ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30' :
+                              'bg-neutral-800 text-neutral-400'
+                            }`}>
+                              {t.priority}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-xs font-medium text-neutral-300">
+                            {t.status.replace("_", " ")}
+                          </td>
+                          <td className="px-6 py-4 text-xs text-neutral-400">
+                            {t.assignee ? t.assignee.name : <span className="text-neutral-600 italic">Unassigned</span>}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {getSlaBadge(frSla.firstResponseState, frSla.firstResponseRemainingMinutes, isFirstResponded)}
+                          </td>
+                          <td className="px-6 py-4 text-right">
+                            {getSlaBadge(frSla.resolutionState, frSla.resolutionRemainingMinutes, isResolved)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {tickets.length === 0 && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-12 text-center text-neutral-500 text-sm">
+                          No tickets matching the filter criteria.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              {/* Sleek Pagination Footer */}
+              <div className="border-t border-neutral-800/80 bg-neutral-900/90 px-6 py-3.5 flex flex-wrap items-center justify-between gap-4 text-xs text-neutral-400">
+                <div className="flex items-center gap-2">
+                  <span>Page <strong className="text-neutral-200 font-semibold">{pageNumber}</strong></span>
+                  <span className="text-neutral-600">•</span>
+                  <span>Showing <strong className="text-neutral-200 font-semibold">{tickets.length}</strong> tickets</span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={handlePrevPage}
+                    disabled={!hasPrevPage || fetching}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-800 bg-neutral-950/80 hover:bg-neutral-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition font-medium text-neutral-300 shadow-sm"
+                  >
+                    <span>←</span> Previous
+                  </button>
+
+                  <div className="px-3 py-1 rounded-lg bg-neutral-800/80 border border-neutral-700/50 text-indigo-400 font-mono text-xs font-semibold">
+                    {pageNumber}
+                  </div>
+
+                  <button
+                    onClick={handleNextPage}
+                    disabled={!hasNextPage || fetching}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-neutral-800 bg-neutral-950/80 hover:bg-neutral-800 hover:text-white disabled:opacity-30 disabled:cursor-not-allowed transition font-medium text-neutral-300 shadow-sm"
+                  >
+                    Next <span>→</span>
+                  </button>
+                </div>
+              </div>
+            </>
           )}
         </section>
       </main>
